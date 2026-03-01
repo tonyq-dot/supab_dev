@@ -1,0 +1,19 @@
+{
+  "name": "kpi-telegram-bot",
+  "version": "1.0.0",
+  "description": "Telegram bot for KPI system — animation studio",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "dotenv": "^16.3.1",
+    "telegraf": "^4.15.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "license": "MIT"
+}
