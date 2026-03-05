@@ -27,18 +27,18 @@ export default function MyWorks() {
   const { user } = useAuth()
   const { config } = usePeriodConfig()
   const now = new Date()
-  const [periodType, setPeriodType] = useState<'quarter' | 'month'>('quarter')
+  const [periodType, setPeriodType] = useState<'all' | 'quarter' | 'month'>('all')
   const [quarter, setQuarter] = useState(Math.floor(now.getMonth() / 3) + 1)
   const [year, setYear] = useState(now.getFullYear())
   const [month, setMonth] = useState(now.getMonth() + 1)
 
-  const range = useMemo(() => {
+  const range = useMemo((): { start?: string; end?: string } => {
+    if (periodType === 'all') return {}
     if (periodType === 'quarter') return getQuarterRange(year, quarter)
     return getMonthRange(year, month)
   }, [periodType, year, quarter, month])
 
   const { scores, totalPoints, loading } = useWorkLogs(user?.id, range.start, range.end)
-
   const [salary, setSalary] = useState<number | null>(null)
   useEffect(() => {
     if (!user?.id) return
@@ -58,7 +58,8 @@ export default function MyWorks() {
       <div className="filters">
         <label>
           Период
-          <select value={periodType} onChange={(e) => setPeriodType(e.target.value as 'quarter' | 'month')}>
+          <select value={periodType} onChange={(e) => setPeriodType(e.target.value as 'all' | 'quarter' | 'month')}>
+            <option value="all">Все время</option>
             <option value="quarter">Квартал</option>
             <option value="month">Месяц</option>
           </select>
@@ -148,7 +149,7 @@ export default function MyWorks() {
           </tbody>
         </table>
       </div>
-      {scores.length === 0 && <p>Нет записей за этот период.</p>}
+      {scores.length === 0 && <p>{periodType === 'all' ? 'Нет записей.' : 'Нет записей за этот период.'}</p>}
     </div>
   )
 }
