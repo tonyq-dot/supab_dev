@@ -23,12 +23,16 @@ export default function AddWork() {
   const [quantity, setQuantity] = useState(1)
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
   const [imageFile, setImageFile] = useState<File | null>(null)
+  
   const [imageTitle, setImageTitle] = useState<string>('')
   const [uploadCategory, setUploadCategory] = useState('')
   const [uploadConfigIds, setUploadConfigIds] = useState<string[]>([])
+  const [tags, setTags] = useState<string[]>([])
+  const [newTag, setNewTag] = useState('')
   const [workTypes, setWorkTypes] = useState<{ id: string; name: string; base_value: number }[]>([])
   const [projectTypes, setProjectTypes] = useState<{ id: string; name: string; value: number }[]>([])
   const [submitting, setSubmitting] = useState(false)
+  const [analyzing, setAnalyzing] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   // New project form (when "Новый проект" selected)
@@ -67,6 +71,59 @@ export default function AddWork() {
     setUrlCache((prev) => ({ ...prev, [path]: url }))
     return url
   }, [urlCache])
+
+  const handleAnalyzeImage = useCallback(async () => {
+    if (!imageFile) return
+    setAnalyzing(true)
+    setError(null)
+
+    try {
+      const { base64, mediaType } = await new Promise<{ base64: string, mediaType: string }>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.readAsDataURL(imageFile)
+        reader.onload = () => {
+            const result = reader.result as string
+            const parts = result.split(',')
+            const mediaType = parts[0].split(':')[1].split(';')[0]
+            const base64 = parts[1]
+            resolve({ base64, mediaType })
+        }
+        reader.onerror = error => reject(error)
+      })
+
+      const { data, error: fnError } = await supabase.functions.invoke('analyze-work-image', {
+        body: { imageBase64: base64, mediaType }
+      })
+
+      if (fnError) throw fnError
+
+      if (data) {
+        // Try to match work type
+        if (data.work_type) {
+            // Simple fuzzy match
+            const matchedType = workTypes.find(wt => 
+                wt.name.toLowerCase().includes(data.work_type.toLowerCase()) || 
+                data.work_type.toLowerCase().includes(wt.name.toLowerCase())
+            )
+            if (matchedType) {
+                setWorkTypeId(matchedType.id)
+            }
+        }
+        if (data.quantity) {
+            setQuantity(data.quantity)
+        }
+        if (data.tags && Array.isArray(data.tags)) {
+            setTags(data.tags)
+        }
+      }
+
+    } catch (err: any) {
+      console.error('Analysis failed', err)
+      setError('Не удалось проанализировать изображение: ' + err.message)
+    } finally {
+      setAnalyzing(false)
+    }
+  }, [imageFile, workTypes])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -159,6 +216,28 @@ export default function AddWork() {
         })
 
         const { data: latest } = await supabase.from('publication_latest').select('*').eq('id', pub.id).single()
+        
+        // Save tags
+        if (tags.length > 0) {
+            for (const tagName of tags) {
+                if (!tagName.trim()) continue
+                
+                // Upsert tag
+                const { data: tagData } = await supabase
+                    .from('tags')
+                    .upsert({ name: tagName.trim() }, { onConflict: 'name' })
+                    .select('id')
+                    .single()
+                
+                if (tagData?.id) {
+                    await supabase.from('media_tags').insert({
+                        media_id: pub.id,
+                        tag_id: tagData.id
+                    })
+                }
+            }
+        }
+
         if (latest) setSavedPublication(latest as PublicationLatest)
       }
     }
@@ -179,6 +258,8 @@ export default function AddWork() {
     setQuantity(1)
     setDate(new Date().toISOString().slice(0, 10))
     setWorkTypeId('')
+    setTags([])
+    setNewTag('')
     setError(null)
   }, [])
 
@@ -287,9 +368,20 @@ export default function AddWork() {
         </label>
         <label>
           Превью (опционально)
-          <ImageDropZone value={imageFile} onChange={setImageFile} />
+          <ImageDropZone value={imageFile} onChange={(file) => {
+            setImageFile(file)
+          }} />
           {imageFile && (
             <>
+              <button 
+                type="button" 
+                className="btn btn-secondary btn-sm" 
+                onClick={handleAnalyzeImage}
+                disabled={analyzing}
+                style={{ marginTop: '0.5rem', width: '100%' }}
+              >
+                {analyzing ? 'Анализирую...' : '🪄 Автозаполнение (AI)'}
+              </button>
               <input
                 type="text"
                 value={imageTitle}
@@ -297,6 +389,54 @@ export default function AddWork() {
                 placeholder="Название картинки"
                 style={{ marginTop: '0.5rem' }}
               />
+              
+              <div style={{ marginTop: '0.75rem' }}>
+                <label>Теги (AI)</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                    {tags.map((tag, idx) => (
+                        <span key={idx} className="badge" style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                            {tag}
+                            <button 
+                                type="button" 
+                                onClick={() => setTags(prev => prev.filter((_, i) => i !== idx))}
+                                style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', padding: 0, marginLeft: '4px' }}
+                            >
+                                ×
+                            </button>
+                        </span>
+                    ))}
+                </div>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <input 
+                        type="text" 
+                        value={newTag} 
+                        onChange={(e) => setNewTag(e.target.value)}
+                        placeholder="Добавить тег"
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                                e.preventDefault()
+                                if (newTag.trim()) {
+                                    setTags(prev => [...prev, newTag.trim()])
+                                    setNewTag('')
+                                }
+                            }
+                        }}
+                    />
+                    <button 
+                        type="button" 
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => {
+                            if (newTag.trim()) {
+                                setTags(prev => [...prev, newTag.trim()])
+                                setNewTag('')
+                            }
+                        }}
+                    >
+                        +
+                    </button>
+                </div>
+              </div>
+
               {!pointsLoading && (
                 <>
                   <label style={{ marginTop: '0.75rem' }}>

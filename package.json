@@ -11,7 +11,8 @@
     "preview": "vite preview",
     "supabase": "supabase",
     "supabase:link": "supabase link --project-ref ctfbwhkeiokoqzournso",
-    "supabase:login": "supabase login"
+    "supabase:login": "supabase login",
+    "update-types": "supabase gen types typescript --project-id ctfbwhkeiokoqzournso > src/lib/database.types.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.990.0",

@@ -23,7 +23,7 @@ export default function Profile() {
   const [generatingToken, setGeneratingToken] = useState(false)
   const [copied, setCopied] = useState(false)
 
-  const botUsername = import.meta.env.VITE_TELEGRAM_BOT_USERNAME ?? 'kpi_bot'
+  const botUsername = import.meta.env.VITE_TELEGRAM_BOT_USERNAME ?? 'do_luma_bot'
 
   useEffect(() => {
     if (!user?.id) return
@@ -69,7 +69,7 @@ export default function Profile() {
 
   const handleCopy = useCallback(async () => {
     if (!linkToken) return
-    await navigator.clipboard.writeText(`/link ${linkToken}`)
+    await navigator.clipboard.writeText(`/start ${linkToken}`)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }, [linkToken])
@@ -145,17 +145,22 @@ export default function Profile() {
         {linkToken && linkTokenExpiry && (
           <div style={{ marginTop: '1rem' }} className="telegram-link-block">
             <p>
-              Откройте бота <strong>@{botUsername}</strong> и отправьте:
+              Перейдите по ссылке или отправьте боту код:
             </p>
             <div className="link-token-row">
-              <code className="link-token">/link {linkToken}</code>
-              <button type="button" className="btn btn-secondary btn-sm" onClick={handleCopy}>
-                {copied ? '✅ Скопировано' : 'Копировать'}
-              </button>
+              <a 
+                href={`https://t.me/${botUsername}?start=${linkToken}`} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="btn btn-primary btn-sm"
+                style={{ marginRight: '10px' }}
+              >
+                Открыть бота
+              </a>
+              <code className="link-token">/start {linkToken}</code>
             </div>
             <p className="hint">
               Код действует до {linkTokenExpiry.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}.
-              После отправки боту привязка произойдёт автоматически.
             </p>
           </div>
         )}

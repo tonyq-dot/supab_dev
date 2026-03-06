@@ -7,18 +7,39 @@ export function useAuth() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null)
-      setLoading(false)
-    }).catch(() => {
-      setLoading(false)
-    })
+    let mounted = true
+
+    // Race between getSession and a timeout
+    const fetchSession = async () => {
+      try {
+        const sessionPromise = supabase.auth.getSession()
+        const timeoutPromise = new Promise<{ data: { session: null }, error: any }>((_, reject) => 
+          setTimeout(() => reject(new Error('Auth timeout')), 5000)
+        )
+
+        const { data: { session }, error } = await Promise.race([sessionPromise, timeoutPromise]) as any
+        
+        if (mounted) {
+          if (error) console.error('Auth error:', error)
+          setUser(session?.user ?? null)
+        }
+      } catch (error) {
+        console.error('Auth error or timeout:', error)
+      } finally {
+        if (mounted) setLoading(false)
+      }
+    }
+
+    fetchSession()
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null)
+      if (mounted) setUser(session?.user ?? null)
     })
 
-    return () => subscription.unsubscribe()
+    return () => {
+      mounted = false
+      subscription.unsubscribe()
+    }
   }, [])
 
   return { user, loading }

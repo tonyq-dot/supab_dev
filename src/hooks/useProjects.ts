@@ -25,9 +25,26 @@ export function useProjects(activeOnly = true) {
       query = query.eq('status', 'Active')
     }
 
-    return query.then(({ data }) => {
-      setProjects((data as Project[]) ?? [])
+    const queryPromise = query.then(({ data, error }) => {
+      if (error) {
+         console.error('Error fetching projects:', error)
+         throw error
+      }
+      return data as Project[]
     })
+
+    const timeoutPromise = new Promise<Project[]>((_, reject) => 
+      setTimeout(() => reject(new Error('Projects fetch timeout')), 5000)
+    )
+
+    return Promise.race([queryPromise, timeoutPromise])
+      .then((data) => {
+        setProjects(data ?? [])
+      })
+      .catch((err) => {
+        console.error('Projects fetch error:', err)
+        setProjects([]) // Fallback to empty list
+      })
   }, [activeOnly])
 
   useEffect(() => {
